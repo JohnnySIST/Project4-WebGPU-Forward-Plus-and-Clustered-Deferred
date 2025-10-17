@@ -19,10 +19,14 @@ export class Lights {
 
     static readonly lightIntensity = 0.1;
 
-    lightsArray = new Float32Array(Lights.maxNumLights * Lights.numFloatsPerLight);
+    lightsArray = new Float32Array(shaders.constants.maxLightsPerCluster * Lights.numFloatsPerLight);
     lightSetStorageBuffer: GPUBuffer;
 
     timeUniformBuffer: GPUBuffer;
+
+    lightIndicesBuffer: GPUBuffer;
+    lightNumBuffer: GPUBuffer;
+    computePipeline: GPUComputePipeline;
 
     moveLightsComputeBindGroupLayout: GPUBindGroupLayout;
     moveLightsComputeBindGroup: GPUBindGroup;
@@ -47,6 +51,15 @@ export class Lights {
             usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
         });
 
+        this.lightIndicesBuffer = device.createBuffer({
+            size: Lights.maxNumLights * Camera.numSlices * 4,
+            usage: GPUBufferUsage.STORAGE
+        });
+        this.lightNumBuffer = device.createBuffer({
+            size: Camera.numSlices * 4,
+            usage: GPUBufferUsage.STORAGE
+        });
+
         this.moveLightsComputeBindGroupLayout = device.createBindGroupLayout({
             label: "move lights compute bind group layout",
             entries: [
@@ -59,6 +72,21 @@ export class Lights {
                     binding: 1,
                     visibility: GPUShaderStage.COMPUTE,
                     buffer: { type: "uniform" }
+                },
+                { // camera uniforms
+                    binding: 2,
+                    visibility: GPUShaderStage.COMPUTE,
+                    buffer: { type: "uniform" }
+                },
+                { // light indices
+                    binding: 3,
+                    visibility: GPUShaderStage.COMPUTE,
+                    buffer: { type: "storage" }
+                },
+                { // light num per cluster
+                    binding: 4,
+                    visibility: GPUShaderStage.COMPUTE,
+                    buffer: { type: "storage" }
                 }
             ]
         });
@@ -74,6 +102,18 @@ export class Lights {
                 {
                     binding: 1,
                     resource: { buffer: this.timeUniformBuffer }
+                },
+                {
+                    binding: 2,
+                    resource: { buffer: camera.uniformsBuffer }
+                },
+                {
+                    binding: 3,
+                    resource: { buffer: this.lightIndicesBuffer }
+                },
+                {
+                    binding: 4,
+                    resource: { buffer: this.lightNumBuffer }
                 }
             ]
         });
@@ -94,6 +134,20 @@ export class Lights {
         });
 
         // TODO-2: initialize layouts, pipelines, textures, etc. needed for light clustering here
+        this.computePipeline = device.createComputePipeline({
+            label: "forward+ clustering compute pipeline",
+            layout: device.createPipelineLayout({
+                label: "forward+ clustering compute pipeline layout",
+                bindGroupLayouts: [ this.moveLightsComputeBindGroupLayout ]
+            }),
+            compute: {
+                module: device.createShaderModule({
+                    label: "forward+ clustering compute shader",
+                    code: shaders.clusteringComputeSrc
+                }),
+                entryPoint: "main"
+            }
+        });
     }
 
     private populateLightsBuffer() {
@@ -113,6 +167,14 @@ export class Lights {
     doLightClustering(encoder: GPUCommandEncoder) {
         // TODO-2: run the light clustering compute pass(es) here
         // implementing clustering here allows for reusing the code in both Forward+ and Clustered Deferred
+        const computePass = encoder.beginComputePass({
+            label: "forward+ compute pass"
+        });
+        computePass.setPipeline(this.computePipeline);
+        computePass.setBindGroup(shaders.constants.bindGroup_scene, this.moveLightsComputeBindGroup);
+        const workGroupCount = Math.ceil(Camera.numSlices / shaders.constants.clusteringWorkgroupSize);
+        computePass.dispatchWorkgroups(workGroupCount);
+        computePass.end();
     }
 
     // CHECKITOUT: this is where the light movement compute shader is dispatched from the host

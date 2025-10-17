@@ -3,14 +3,49 @@ import { toRadians } from "../math_util";
 import { device, canvas, fovYDegrees, aspectRatio } from "../renderer";
 
 class CameraUniforms {
-    readonly buffer = new ArrayBuffer(16 * 4);
+    readonly buffer = new ArrayBuffer(44 * 4);
     private readonly floatView = new Float32Array(this.buffer);
+    private readonly intView = new Int32Array(this.buffer);
 
     set viewProjMat(mat: Float32Array) {
         // TODO-1.1: set the first 16 elements of `this.floatView` to the input `mat`
+        this.floatView.set(mat.subarray(0, 16), 0);
     }
 
     // TODO-2: add extra functions to set values needed for light clustering here
+    set viewMat(mat: Float32Array) {
+        this.floatView.set(mat.subarray(0, 16), 16);
+    }
+    set nearPlane(value: number) {
+        this.floatView.set(new Float32Array([value]), 32);
+    }
+    set farPlane(value: number) {
+        this.floatView.set(new Float32Array([value]), 33);
+    }
+    set dimSlicesZ(value: number) {
+        this.intView.set(new Int32Array([value]), 34);
+    }
+    set dimSlicesX(value: number) {
+        this.intView.set(new Int32Array([value]), 35);
+    }
+    set dimSlicesY(value: number) {
+        this.intView.set(new Int32Array([value]), 36);
+    }
+    set numSlices(value: number) {
+        this.intView.set(new Int32Array([value]), 37);
+    }
+    set canvasWidth(value: number) {
+        this.intView.set(new Int32Array([value]), 38);
+    }
+    set canvasHeight(value: number) {
+        this.intView.set(new Int32Array([value]), 39);
+    }
+    set fovY(value: number) {
+        this.floatView.set(new Float32Array([value]), 40);
+    }
+    set aspect(value: number) {
+        this.floatView.set(new Float32Array([value]), 41);
+    }
 }
 
 export class Camera {
@@ -30,6 +65,11 @@ export class Camera {
     static readonly nearPlane = 0.1;
     static readonly farPlane = 1000;
 
+    static readonly dimSlicesX = 16;
+    static readonly dimSlicesY = 8;
+    static readonly dimSlicesZ = 32;
+    static readonly numSlices = Camera.dimSlicesX * Camera.dimSlicesY * Camera.dimSlicesZ;
+
     keys: { [key: string]: boolean } = {};
 
     constructor () {
@@ -38,8 +78,19 @@ export class Camera {
         // check `lights.ts` for examples of using `device.createBuffer()`
         //
         // note that you can add more variables (e.g. inverse proj matrix) to this buffer in later parts of the assignment
+        this.uniformsBuffer = device.createBuffer({
+            size: this.uniforms.buffer.byteLength,
+            usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+        });
 
         this.projMat = mat4.perspective(toRadians(fovYDegrees), aspectRatio, Camera.nearPlane, Camera.farPlane);
+
+        this.uniforms.nearPlane = Camera.nearPlane;
+        this.uniforms.farPlane = Camera.farPlane;
+        this.uniforms.dimSlicesZ = Camera.dimSlicesZ;
+        this.uniforms.dimSlicesX = Camera.dimSlicesX;
+        this.uniforms.dimSlicesY = Camera.dimSlicesY;
+        this.uniforms.numSlices = Camera.numSlices;
 
         this.rotateCamera(0, 0); // set initial camera vectors
 
@@ -129,10 +180,17 @@ export class Camera {
         const viewMat = mat4.lookAt(this.cameraPos, lookPos, [0, 1, 0]);
         const viewProjMat = mat4.mul(this.projMat, viewMat);
         // TODO-1.1: set `this.uniforms.viewProjMat` to the newly calculated view proj mat
+        this.uniforms.viewProjMat = viewProjMat;
 
         // TODO-2: write to extra buffers needed for light clustering here
+        this.uniforms.viewMat = viewMat;
+        this.uniforms.canvasWidth = canvas.width;
+        this.uniforms.canvasHeight = canvas.height;
+        this.uniforms.fovY = toRadians(fovYDegrees);
+        this.uniforms.aspect = aspectRatio;
 
         // TODO-1.1: upload `this.uniforms.buffer` (host side) to `this.uniformsBuffer` (device side)
         // check `lights.ts` for examples of using `device.queue.writeBuffer()`
+        device.queue.writeBuffer(this.uniformsBuffer, 0, this.uniforms.buffer);
     }
 }
