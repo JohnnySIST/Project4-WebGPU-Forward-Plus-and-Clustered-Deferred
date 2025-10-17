@@ -24,7 +24,6 @@
 
 struct FragmentInput
 {
-    @builtin(position) fragPos: vec4f,
     @location(0) pos: vec3f,
     @location(1) nor: vec3f,
     @location(2) uv: vec2f
@@ -46,8 +45,11 @@ fn main(in: FragmentInput) -> @location(0) vec4f
         discard;
     }
 
-    let sliceX = u32(floor(in.fragPos.x / f32(cameraUniforms.canvasWidth) * f32(cameraUniforms.dimSlicesX)));
-    let sliceY = u32(floor(in.fragPos.y / f32(cameraUniforms.canvasHeight) * f32(cameraUniforms.dimSlicesY)));
+    // calculate NDC x and y
+    let clipPos = cameraUniforms.viewProjMat * vec4(in.pos, 1);
+    let ndcPos = clipPos.xyz / clipPos.w;
+    let sliceX = u32(floor((ndcPos.x + 1.0) / 2.0 * f32(cameraUniforms.dimSlicesX)));
+    let sliceY = u32(floor((ndcPos.y + 1.0) / 2.0 * f32(cameraUniforms.dimSlicesY)));
     let clusterIdx = sliceZ * u32(cameraUniforms.dimSlicesX * cameraUniforms.dimSlicesY) +
                      sliceY * u32(cameraUniforms.dimSlicesX) +
                      sliceX;
