@@ -38,7 +38,14 @@ export const constants = {
 // =================================
 
 function evalShaderRaw(raw: string) {
-    return eval('`' + raw.replaceAll('${', '${constants.') + '`');
+    return raw
+        .replace(/\$\{bindGroup_scene\}/g, constants.bindGroup_scene.toString())
+        .replace(/\$\{bindGroup_model\}/g, constants.bindGroup_model.toString())
+        .replace(/\$\{bindGroup_material\}/g, constants.bindGroup_material.toString())
+        .replace(/\$\{moveLightsWorkgroupSize\}/g, constants.moveLightsWorkgroupSize.toString())
+        .replace(/\$\{clusteringWorkgroupSize\}/g, constants.clusteringWorkgroupSize.toString())
+        .replace(/\$\{maxLightsPerCluster\}/g, constants.maxLightsPerCluster.toString())
+        .replace(/\$\{lightRadius\}/g, constants.lightRadius.toString());
 }
 
 const commonSrc: string = evalShaderRaw(commonRaw);
