@@ -41,7 +41,11 @@ export async function initWebGPU() {
         throw new Error("no appropriate GPUAdapter found");
     }
 
-    device = await adapter.requestDevice();
+    device = await adapter.requestDevice({
+        requiredLimits: {
+            maxColorAttachmentBytesPerSample: 128
+        }
+    });
 
     context = canvas.getContext("webgpu")!;
     canvasFormat = navigator.gpu.getPreferredCanvasFormat();
